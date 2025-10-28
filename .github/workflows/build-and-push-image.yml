@@ -67,11 +67,19 @@ jobs:
 
           if [ -n "${{ inputs.semver }}" ]; then
             V="${{ inputs.semver }}"
+            echo "semver=${PREFIX}-$V" >> $GITHUB_OUTPUT
+            echo "TAG_SEMVER=${PREFIX}-$V" >> $GITHUB_ENV
+            echo "HAS_SEMVER=true" >> $GITHUB_ENV
           else
             V=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$V" ]; then
+              echo "semver=${PREFIX}-$V" >> $GITHUB_OUTPUT
+              echo "TAG_SEMVER=${PREFIX}-$V" >> $GITHUB_ENV
+              echo "HAS_SEMVER=true" >> $GITHUB_ENV
+            else
+              echo "HAS_SEMVER=false" >> $GITHUB_ENV
+            fi
           fi
-          echo "semver=${PREFIX}-$V" >> $GITHUB_OUTPUT
-          echo "TAG_SEMVER=${PREFIX}-$V" >> $GITHUB_ENV
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,15 +91,19 @@ jobs:
           context: .
           push: true
           tags: |
-            if [ -n "${SEMVER}" ]; then
-              ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.TAG_SEMVER }}
-            fi
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.TAG_SHORT }}
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.IMAGE_TAG }}
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ github.sha }}
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      
+      - name: Tag main application image with semver
+        if: env.HAS_SEMVER == 'true'
+        run: |
+          docker tag ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.IMAGE_TAG }} \
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.TAG_SEMVER }}
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.TAG_SEMVER }}
       
       - name: Build and push nginx sidecar image
         id: build-nginx
@@ -101,15 +113,19 @@ jobs:
           context: ./docker/nginx
           push: true
           tags: |
-            if [ -n "${SEMVER}" ]; then
-              ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SEMVER }}
-            fi
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SHORT }}
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.IMAGE_TAG }}
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ github.sha }}
             ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      
+      - name: Tag nginx sidecar image with semver
+        if: inputs.nginx-sidecar == true && env.HAS_SEMVER == 'true'
+        run: |
+          docker tag ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.IMAGE_TAG }} \
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SEMVER }}
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SEMVER }}
       
       
       - name: Build summary
