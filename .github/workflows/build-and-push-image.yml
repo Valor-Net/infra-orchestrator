@@ -73,6 +73,9 @@ jobs:
           echo "IMAGE_TAG=$SHA_SHORT" >> $GITHUB_ENV
           echo "TAG_SEMVER=${PREFIX}-${{ inputs.semver }}" >> $GITHUB_ENV
           echo "TAG_SHORT=${PREFIX}-${SHA_SHORT}" >> $GITHUB_ENV
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
       
       - name: Build and push main application image
         id: build-main
