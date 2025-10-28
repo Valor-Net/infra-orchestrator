@@ -84,11 +84,11 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:${{ env.TAG_SEMVER }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:${{ env.TAG_SHORT }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:${{ env.IMAGE_TAG }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:${{ github.sha }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:latest
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.TAG_SEMVER }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.TAG_SHORT }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:${{ github.sha }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-repo:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -100,11 +100,11 @@ jobs:
           context: ./docker/nginx
           push: true
           tags: |
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SEMVER }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SHORT }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:${{ env.IMAGE_TAG }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:${{ github.sha }}
-            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:latest
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SEMVER }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.TAG_SHORT }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:${{ github.sha }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/base-core-${{ inputs.service-name }}-nginx-repo:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
