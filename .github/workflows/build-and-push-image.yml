@@ -1,0 +1,114 @@
+name: Build and Push to ECR
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+      nginx-sidecar:
+        required: true
+        type: boolean
+      semver:
+        required: true
+        type: string
+    outputs:
+      image-tag:
+        description: "Generated image tag"
+        value: ${{ jobs.build.outputs.image-tag }}
+      semver:
+        description: "Image semantic version"
+        value: ${{ jobs.build.outputs.semver }}
+      image-uri:
+        description: "Image URI"
+        value: ${{ jobs.build.outputs.image-uri }}
+      nginx-image-uri:
+        description: "Nginx Image URI (if applicable)"
+        value: ${{ jobs.build.outputs.nginx-image-uri }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+      semver: ${{ inputs.semver }}
+      image-uri: ${{ steps.build-main.outputs.image-uri }}
+      nginx-image-uri: ${{ steps.build-nginx.outputs.nginx-image-uri }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Generate image metadata
+        id: meta
+        run: |
+          IMAGE_TAG="${GITHUB_SHA:0:8}"
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "Generated tag: ${IMAGE_TAG}"
+      
+      - name: Build and push main application image
+        id: build-main
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:${{ inputs.semver }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-repo:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Set main image URI
+        id: set-main-uri
+        run: |
+          IMAGE_URI="${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}:${{ env.IMAGE_TAG }}"
+          echo "image-uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+          echo "Main image pushed: ${IMAGE_URI}"
+      
+      - name: Build and push nginx sidecar image
+        id: build-nginx
+        if: inputs.nginx-sidecar == true
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/nginx
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:${{ inputs.semver }}
+            ${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx-repo:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Set nginx image URI
+        id: set-nginx-uri
+        if: inputs.nginx-sidecar == true
+        run: |
+          NGINX_IMAGE_URI="${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx:${{ env.IMAGE_TAG }}"
+          echo "nginx-image-uri=${NGINX_IMAGE_URI}" >> $GITHUB_OUTPUT
+          echo "Nginx image pushed: ${NGINX_IMAGE_URI}"
+      
+      - name: Build summary
+        run: |
+          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service**: ${{ inputs.service-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag**: ${{ env.IMAGE_TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Semantic Version**: ${{ inputs.semver }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Main Image**: \`${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.nginx-sidecar }}" == "true" ]; then
+            echo "**Nginx Image**: \`${{ secrets.DOCKER_REGISTRY_URL }}/${{ inputs.service-name }}-nginx:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          fi

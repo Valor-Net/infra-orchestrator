@@ -1,0 +1,185 @@
+name: Deploy Service Version To Tenant
+
+on:
+  workflow_call:
+    inputs:
+      tenant:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      service-name:
+        required: true
+        type: string
+      service-kind:
+        required: true
+        type: string
+    outputs:
+      tag:
+        description: "Deployed image tag"
+        value: ${{ jobs.deploy.outputs.tag }}
+      service-name:
+        description: "Updated service"
+        value: ${{ jobs.deploy.outputs.service-name }}
+      environment:
+        description: "Target environment"
+        value: ${{ jobs.deploy.outputs.environment }}
+      tenant:
+        description: "Target tenant"
+        value: ${{ jobs.deploy.outputs.tenant }}
+
+concurrency:
+  group: pulumi-${{ inputs.tenant }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      service-name: ${{ inputs.service-name }}
+      tag: ${{ inputs.tag }}
+      environment: ${{ inputs.environment }}
+      tenant: ${{ inputs.tenant }}
+    
+    steps:
+      - name: Checkout Pulumi repository
+        uses: actions/checkout@v4
+        with:
+          repository: Valor-Net/pulumi-aws
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+      
+      - name: Update service imageTag in config
+        id: update-config
+        run: |
+          CONFIG_FILE="configs/customers/${{ inputs.tenant }}/${{ inputs.tenant }}.${{ inputs.environment }}.json"
+          
+          echo "Config file: $CONFIG_FILE"
+          
+          # Verifica se o arquivo existe
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Config file not found: $CONFIG_FILE"
+            exit 1
+          fi
+          
+          echo "Current config:"
+          cat "$CONFIG_FILE" | jq .
+          
+          # Atualiza ou adiciona o imageTag usando jq
+          # Se o caminho não existe, cria toda a estrutura necessária
+          jq --arg serviceKind "${{ inputs.service-kind }}" \
+             --arg serviceName "${{ inputs.service-name }}" \
+             --arg imageTag "${{ inputs.tag }}" \
+             '.overrides[$serviceKind][$serviceName].imageTag = $imageTag' \
+             "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
+          
+          # Substitui o arquivo original
+          mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+          
+          echo ""
+          echo "Updated config:"
+          cat "$CONFIG_FILE" | jq .
+          
+          # Verifica se houve alteração
+          if git diff --quiet "$CONFIG_FILE"; then
+            echo "No changes detected (imageTag already up to date)"
+            echo "config-changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Config updated successfully"
+            echo "config-changed=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit and push config changes
+        if: steps.update-config.outputs.config-changed == 'true'
+        run: |
+          CONFIG_FILE="configs/customers/${{ inputs.tenant }}/${{ inputs.tenant }}.${{ inputs.environment }}.json"
+          
+          git add "$CONFIG_FILE"
+          git commit -m "🤖 deploy: update ${{ inputs.service-name }} to ${{ inputs.tag }} for ${{ inputs.tenant }}@${{ inputs.environment }}
+
+          Service: ${{ inputs.service-name }}
+          Kind: ${{ inputs.service-kind }}
+          Tag: ${{ inputs.tag }}
+          Tenant: ${{ inputs.tenant }}
+          Environment: ${{ inputs.environment }}
+          
+          Triggered by: ${{ github.repository }}@${{ github.sha }}"
+          
+          git push origin main
+          
+          echo "Config committed and pushed"
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Setup Node.js and PNPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      
+      - name: Setup Pulumi
+        uses: pulumi/actions@v4
+        with:
+          pulumi-version: ^3.0.0
+      
+      - name: Pulumi up
+        id: pulumi-up
+        run: |
+          pulumi login s3://valornet-pulumi-backend
+
+          pulumi up --yes --stack "${{ inputs.tenant }}-${{ inputs.environment }}" \
+            --target "urn:pulumi:${{ inputs.tenant }}-${{ inputs.environment }}::infra::awsx:ecs:FargateService::${{ inputs.service-name }}" \
+            --target-dependents \
+            --suppress-outputs \
+            --message "Deploy ${{ inputs.service-name }}:${{ inputs.tag }} to ${{ inputs.tenant }}@${{ inputs.environment }}"
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ""
+          OAUTH_PRIVATE_KEY: ${{ secrets.STG_OAUTH_PRIVATE_KEY }}
+          OAUTH_PUBLIC_KEY: ${{ secrets.STG_OAUTH_PUBLIC_KEY }}
+      
+      - name: Deployment summary
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service** | ${{ inputs.service-name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Kind** | ${{ inputs.service-kind }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image Tag** | \`${{ inputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tenant** | ${{ inputs.tenant }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Stack** | ${{ inputs.tenant }}-${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Config Updated** | ${{ steps.update-config.outputs.config-changed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: [\`${{ github.repository }}@${GITHUB_SHA:0:7}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "### Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Service: **${{ inputs.service-name }}**" >> $GITHUB_STEP_SUMMARY
+          echo "Tenant: **${{ inputs.tenant }}@${{ inputs.environment }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
