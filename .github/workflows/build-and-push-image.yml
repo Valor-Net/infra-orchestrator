@@ -79,8 +79,8 @@ jobs:
           else
             V=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           fi
-          echo "semver=$V" >> $GITHUB_OUTPUT
-          echo "TAG_SEMVER=$V" >> $GITHUB_ENV
+          echo "semver=${PREFIX}-$V" >> $GITHUB_OUTPUT
+          echo "TAG_SEMVER=${PREFIX}-$V" >> $GITHUB_ENV
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
