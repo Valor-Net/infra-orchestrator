@@ -56,7 +56,7 @@ jobs:
         id: generate-tags
         run: |
           SHA_SHORT="${GITHUB_SHA:0:8}"
-          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/* ]] || [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             PREFIX="prod"
           else
             PREFIX="stg"
