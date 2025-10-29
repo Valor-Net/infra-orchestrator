@@ -25,8 +25,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      image-tag: ${{ steps.meta.outputs.image-tag }}
-      semver: ${{ inputs.semver }}
+      image-tag: ${{ steps.generate-tags.outputs.image-tag }}
+      semver: ${{ steps.generate-tags.outputs.semver }}
 
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
