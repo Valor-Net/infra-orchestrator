@@ -104,6 +104,9 @@ jobs:
         run: |
           CONFIG_FILE="configs/customers/${{ inputs.tenant }}/${{ inputs.tenant }}.${{ inputs.environment }}.json"
           
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+
           git add "$CONFIG_FILE"
           git commit -m "🤖 deploy: update ${{ inputs.service-name }} to ${{ inputs.tag }} for ${{ inputs.tenant }}@${{ inputs.environment }}
 
@@ -115,9 +118,28 @@ jobs:
           
           Triggered by: ${{ github.repository }}@${{ github.sha }}"
           
-          git push origin main
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES..."
+            
+            # Pull latest
+            git pull origin feat/change-structure --rebase
+            
+            # Tenta push
+            if git push origin feat/change-structure; then
+              echo "✅ Config committed and pushed successfully"
+              exit 0
+            fi
+            
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              echo "⚠️ Push failed, retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
           
-          echo "Config committed and pushed"
+          echo "❌ Failed to push after $MAX_RETRIES attempts"
+          exit 1
       
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

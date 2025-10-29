@@ -25,7 +25,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      image-tag: ${{ steps.generate-tags.outputs.image-tag }}
+      image-tag: ${{ steps.generate-tags.outputs.TAG_SHORT }}
       semver: ${{ steps.generate-tags.outputs.semver }}
 
     env:
