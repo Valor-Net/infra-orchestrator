@@ -61,7 +61,9 @@ jobs:
           else
             PREFIX="stg"
           fi
-          echo "image-tag=$SHA_SHORT" >> $GITHUB_OUTPUT
+
+          TAG_SHORT="${PREFIX}-${SHA_SHORT}"
+          echo "TAG_SHORT=$TAG_SHORT" >> $GITHUB_OUTPUT
           echo "IMAGE_TAG=$SHA_SHORT" >> $GITHUB_ENV
           echo "TAG_SHORT=${PREFIX}-${SHA_SHORT}" >> $GITHUB_ENV
 
