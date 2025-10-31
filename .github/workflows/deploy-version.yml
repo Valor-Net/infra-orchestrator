@@ -165,6 +165,18 @@ jobs:
         uses: pulumi/actions@v4
         with:
           pulumi-version: ^3.0.0
+
+      - name: Set environment prefix
+        id: env-prefix
+        run: |
+            if [ "${{ inputs.environment }}" = "staging" ]; then
+                echo "prefix=STG" >> $GITHUB_OUTPUT
+            elif [ "${{ inputs.environment }}" = "production" ]; then
+                echo "prefix=PROD" >> $GITHUB_OUTPUT
+            else
+                echo "Invalid environment: ${{ inputs.environment }}"
+                exit 1
+            fi
       
       - name: Pulumi up
         id: pulumi-up
@@ -178,8 +190,8 @@ jobs:
             --message "Deploy ${{ inputs.service-name }}:${{ inputs.tag }} to ${{ inputs.tenant }}@${{ inputs.environment }}"
         env:
           PULUMI_CONFIG_PASSPHRASE: ""
-          OAUTH_PRIVATE_KEY: ${{ secrets.STG_OAUTH_PRIVATE_KEY }}
-          OAUTH_PUBLIC_KEY: ${{ secrets.STG_OAUTH_PUBLIC_KEY }}
+          OAUTH_PRIVATE_KEY: ${{ secrets[format('{0}_OAUTH_PRIVATE_KEY', steps.env-prefix.outputs.prefix)] }}
+          OAUTH_PUBLIC_KEY: ${{ secrets[format('{0}_OAUTH_PUBLIC_KEY', steps.env-prefix.outputs.prefix)] }}
       
       - name: Deployment summary
         run: |
